@@ -25,23 +25,25 @@ function lebrelHeaders(token) {
   };
 }
 
-function xHeaders(auth, ct0) {
+function xHeaders(auth, ct0, extra = {}) {
   return {
-    'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LTa2tjN6MuZFHVx3etmEGGVjC2xVFVDRh8ESIFK4',
+    'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
     'cookie': `auth_token=${auth}; ct0=${ct0}`,
     'x-csrf-token': ct0,
     'content-type': 'application/json',
-    'User-Agent': UA,
+    'user-agent': UA,
+    'x-twitter-active-user': 'yes',
+    'x-twitter-client-language': 'id',
+    'origin': 'https://x.com',
+    'referer': 'https://x.com/',
+    ...extra,
   };
 }
 
 async function followLebrel(auth, ct0) {
-  const res = await fetch('https://x.com/i/api/1.1/friendships/create.json', {
+  const res = await fetch('https://api.x.com/1.1/friendships/create.json', {
     method: 'POST',
-    headers: {
-      ...xHeaders(auth, ct0),
-      'content-type': 'application/x-www-form-urlencoded',
-    },
+    headers: xHeaders(auth, ct0, { 'content-type': 'application/x-www-form-urlencoded' }),
     body: 'screen_name=LebrelAI&skip_status=true',
   });
   const data = await res.json();
@@ -82,9 +84,11 @@ async function postQuoteTweet(auth, ct0, text, quoteUrl) {
     responsive_web_enhance_cards_enabled: false,
   };
 
-  const res = await fetch('https://x.com/i/api/graphql/UYy9vA3EXPE1yUjdMBPpxg/CreateTweet', {
+  const hdrs = xHeaders(auth, ct0);
+  console.log('  X headers:', JSON.stringify(hdrs));
+  const res = await fetch('https://api.x.com/graphql/UYy9vA3EXPE1yUjdMBPpxg/CreateTweet', {
     method: 'POST',
-    headers: xHeaders(auth, ct0),
+    headers: hdrs,
     body: JSON.stringify({ variables, features, queryId: 'UYy9vA3EXPE1yUjdMBPpxg' }),
   });
 
