@@ -35,6 +35,20 @@ function xHeaders(auth, ct0) {
   };
 }
 
+async function followLebrel(auth, ct0) {
+  const res = await fetch('https://x.com/i/api/1.1/friendships/create.json', {
+    method: 'POST',
+    headers: {
+      ...xHeaders(auth, ct0),
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: 'screen_name=LebrelAI&skip_status=true',
+  });
+  const data = await res.json();
+  if (data.errors) throw new Error(JSON.stringify(data.errors));
+  return true;
+}
+
 async function postQuoteTweet(auth, ct0, text, quoteUrl) {
   const variables = {
     tweet_text: text,
@@ -75,37 +89,66 @@ async function postQuoteTweet(auth, ct0, text, quoteUrl) {
   });
 
   const data = await res.json();
+  if (data.errors) throw new Error(JSON.stringify(data.errors));
   const tweetId = data?.data?.create_tweet?.tweet_results?.result?.rest_id;
-  if (!tweetId) throw new Error('Gagal post tweet: ' + JSON.stringify(data));
+  if (!tweetId) throw new Error('No tweet ID: ' + JSON.stringify(data));
   const username = data?.data?.create_tweet?.tweet_results?.result?.core?.user_results?.result?.legacy?.screen_name;
   return `https://x.com/${username}/status/${tweetId}`;
 }
 
-async function processAkun(index) {
-  const email = emails[index];
-  const usn = usns[index];
-  const { auth, ct0 } = akuns[index];
-
-  console.log(`\n[${index + 1}] Memproses ${email} (@${usn})`);
-
-  // 1. Register
-  console.log(`  Register...`);
-  const regRes = await fetch(`${BASE}/api/register`, {
+async function getLebrelToken(email) {
+  const res = await fetch(`${BASE}/api/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'User-Agent': UA, 'Origin': BASE, 'Referer': `${BASE}/` },
     body: JSON.stringify({ email, ref: REF }),
   });
-  const regData = await regRes.json();
-  const token = regData.token;
-  if (!token) { console.log(`  Gagal register:`, regData); return; }
+  const data = await res.json();
+  return data.token || null;
+}
+
+async function doQuote(token, auth, ct0) {
+  const me = await fetch(`${BASE}/api/me`, { headers: lebrelHeaders(token) }).then(r => r.json());
+  if (me.quests.quote) { console.log(`  Quote skip.`); return; }
+
+  const quoteText = `Getting early access to @LebrelAI: private, uncensored AI through chat and API.\n\nJoin with my invite link: ${me.referral_link}`;
+  console.log(`  Post quote tweet...`);
+  try {
+    const tweetUrl = await postQuoteTweet(auth, ct0, quoteText, QUOTE_TWEET_URL);
+    console.log(`  Tweet: ${tweetUrl}`);
+    await sleep(3000);
+    const r = await fetch(`${BASE}/api/quest/quote`, {
+      method: 'POST',
+      headers: lebrelHeaders(token),
+      body: JSON.stringify({ url: tweetUrl }),
+    }).then(r => r.json());
+    console.log(`  Quote: ${r.quests?.quote ? 'OK' : 'Gagal'} | Points: ${r.points}`);
+    await sleep(2000);
+  } catch (err) {
+    console.log(`  Gagal post tweet:`, err.message);
+  }
+}
+
+async function processAkun(index, onlyQuote) {
+  const email = emails[index];
+  const usn = usns[index];
+  const { auth, ct0 } = akuns[index];
+
+  console.log(`\n[${index + 1}] ${email} (@${usn})`);
+
+  const token = await getLebrelToken(email);
+  if (!token) { console.log(`  Gagal dapet token`); return; }
   console.log(`  Token OK`);
 
-  // 2. Cek quest status
+  if (onlyQuote) {
+    await doQuote(token, auth, ct0);
+    return;
+  }
+
   const me = await fetch(`${BASE}/api/me`, { headers: lebrelHeaders(token) }).then(r => r.json());
   const q = me.quests;
   console.log(`  Quest - follow:${q.follow} like:${q.like} quote:${q.quote} card:${q.card}`);
 
-  // 3. Submit username X
+  // Submit username X
   if (!me.x) {
     console.log(`  Submit username @${usn}...`);
     await fetch(`${BASE}/api/x`, {
@@ -119,17 +162,24 @@ async function processAkun(index) {
     console.log(`  Username X sudah ada: @${me.x.username}`);
   }
 
-  // 4. Quest follow
+  // Follow
   if (!q.follow) {
+    console.log(`  Auto follow @LebrelAI...`);
+    try {
+      await followLebrel(auth, ct0);
+      console.log(`  Follow X OK`);
+    } catch (err) {
+      console.log(`  Gagal follow X:`, err.message);
+    }
     console.log(`  Claim follow...`);
     const r = await fetch(`${BASE}/api/quest/follow`, { method: 'POST', headers: lebrelHeaders(token) }).then(r => r.json());
-    console.log(`  Follow: ${r.quests?.follow ? 'OK' : 'Gagal'} | Points: ${r.points}`);
+    console.log(`  Follow quest: ${r.quests?.follow ? 'OK' : 'Gagal'} | Points: ${r.points}`);
     await sleep(2000);
   } else {
     console.log(`  Follow skip.`);
   }
 
-  // 5. Quest like
+  // Like
   if (!q.like) {
     console.log(`  Nunggu 5 detik lalu claim like...`);
     await sleep(5000);
@@ -140,31 +190,12 @@ async function processAkun(index) {
     console.log(`  Like skip.`);
   }
 
-  // 6. Quest quote
-  if (!q.quote) {
-    const meNow = await fetch(`${BASE}/api/me`, { headers: lebrelHeaders(token) }).then(r => r.json());
-    const quoteText = `Getting early access to @LebrelAI: private, uncensored AI through chat and API.\n\nJoin with my invite link: ${meNow.referral_link}`;
-    console.log(`  Post quote tweet...`);
-    try {
-      const tweetUrl = await postQuoteTweet(auth, ct0, quoteText, QUOTE_TWEET_URL);
-      console.log(`  Tweet: ${tweetUrl}`);
-      await sleep(3000);
-      const r = await fetch(`${BASE}/api/quest/quote`, {
-        method: 'POST',
-        headers: lebrelHeaders(token),
-        body: JSON.stringify({ url: tweetUrl }),
-      }).then(r => r.json());
-      console.log(`  Quote: ${r.quests?.quote ? 'OK' : 'Gagal'} | Points: ${r.points}`);
-      await sleep(2000);
-    } catch (err) {
-      console.log(`  Gagal post tweet:`, err.message);
-    }
-  } else {
-    console.log(`  Quote skip.`);
-  }
+  // Quote
+  await doQuote(token, auth, ct0);
 
-  // 7. Quest card
-  if (!q.card) {
+  // Card
+  const meNow = await fetch(`${BASE}/api/me`, { headers: lebrelHeaders(token) }).then(r => r.json());
+  if (!meNow.quests.card) {
     console.log(`  Claim card...`);
     const r = await fetch(`${BASE}/api/quest/card`, {
       method: 'POST',
@@ -177,36 +208,40 @@ async function processAkun(index) {
   }
 
   const final = await fetch(`${BASE}/api/me`, { headers: lebrelHeaders(token) }).then(r => r.json());
-  console.log(`  Selesai! Total points: ${final.points} | Rank: #${final.rank}`);
+  console.log(`  Selesai! Points: ${final.points} | Rank: #${final.rank}`);
 }
 
 async function main() {
   const total = emails.length;
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const ask = q => new Promise(r => rl.question(q, r));
+
   console.log(`Total akun: ${total}`);
   console.log('1. 1 akun');
   console.log('2. Semua akun');
   console.log('3. From X to end');
+  const pilihan = await ask('Pilih (1/2/3): ');
 
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const ask = q => new Promise(r => rl.question(q, r));
-
-  const mode = await ask('Pilih (1/2/3): ');
   let indices = [];
-
-  if (mode === '1') {
+  if (pilihan === '1') {
     const n = parseInt(await ask(`Nomor akun (1-${total}): `)) - 1;
     indices = [n];
-  } else if (mode === '2') {
+  } else if (pilihan === '2') {
     indices = [...Array(total).keys()];
-  } else if (mode === '3') {
+  } else if (pilihan === '3') {
     const n = parseInt(await ask(`Start dari nomor (1-${total}): `)) - 1;
     indices = [...Array(total).keys()].slice(n);
   }
 
+  console.log('1. All quest');
+  console.log('2. Post aja');
+  const mode = await ask('Pilih (1/2): ');
+  const onlyQuote = mode === '2';
+
   rl.close();
 
   for (const i of indices) {
-    await processAkun(i);
+    await processAkun(i, onlyQuote);
     if (i < indices[indices.length - 1]) await sleep(3000);
   }
 
