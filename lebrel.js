@@ -85,7 +85,6 @@ async function postQuoteTweet(auth, ct0, text, quoteUrl) {
   };
 
   const hdrs = xHeaders(auth, ct0);
-  console.log('  X headers:', JSON.stringify(hdrs));
   const QUERY_ID = '7TKRKCPuAGsmYde0CudbVg';
   const res = await fetch(`https://api.x.com/graphql/${QUERY_ID}/CreateTweet`, {
     method: 'POST',
@@ -93,9 +92,7 @@ async function postQuoteTweet(auth, ct0, text, quoteUrl) {
     body: JSON.stringify({ variables, features, queryId: QUERY_ID }),
   });
 
-  const rawText = await res.text();
-  console.log('  X raw:', rawText);
-  const data = JSON.parse(rawText);
+  const data = await res.json();
   if (data.errors) throw new Error(JSON.stringify(data.errors));
   const tweetId = data?.data?.create_tweet?.tweet_results?.result?.rest_id;
   if (!tweetId) throw new Error('No tweet ID: ' + JSON.stringify(data));
@@ -157,11 +154,12 @@ async function processAkun(index, onlyQuote) {
 
   // Submit username X
   if (!me.x) {
-    console.log(`  Submit username @${usn}...`);
+    const usnClean = usn.replace(/^@/, '');
+    console.log(`  Submit username @${usnClean}...`);
     await fetch(`${BASE}/api/x`, {
       method: 'POST',
       headers: lebrelHeaders(token),
-      body: JSON.stringify({ username: usn }),
+      body: JSON.stringify({ username: usnClean }),
     });
     console.log(`  Nunggu 10 detik...`);
     await sleep(10000);
@@ -247,9 +245,13 @@ async function main() {
 
   rl.close();
 
-  for (const i of indices) {
-    await processAkun(i, onlyQuote);
-    if (i < indices[indices.length - 1]) await sleep(3000);
+  for (let j = 0; j < indices.length; j++) {
+    await processAkun(indices[j], onlyQuote);
+    if (j < indices.length - 1) {
+      const delay = Math.floor(Math.random() * 31 + 20) * 1000;
+      console.log(`  Jeda ${delay / 1000}s...`);
+      await sleep(delay);
+    }
   }
 
   console.log('\nSemua selesai!');
