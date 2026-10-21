@@ -1,5 +1,6 @@
-import fetch from 'node-fetch';
-import fs from 'fs';
+const fetch = require('node-fetch');
+const fs = require('fs');
+const readline = require('readline');
 
 const REF = 'TENX';
 const QUOTE_TWEET_URL = 'https://x.com/LebrelAI/status/2112227280848048494';
@@ -30,6 +31,7 @@ function xHeaders(auth, ct0) {
     'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LTa2tjN6MuZFHVx3etmEGGVjC2xVFVDRh8ESIFK4',
     'cookie': `auth_token=${auth}; ct0=${ct0}`,
     'x-csrf-token': ct0,
+    'content-type': 'application/json',
     'User-Agent': UA,
   };
 }
@@ -69,10 +71,7 @@ async function postQuoteTweet(auth, ct0, text, quoteUrl) {
 
   const res = await fetch('https://x.com/i/api/graphql/UYy9vA3EXPE1yUjdMBPpxg/CreateTweet', {
     method: 'POST',
-    headers: {
-      ...xHeaders(auth, ct0),
-      'content-type': 'application/json',
-    },
+    headers: xHeaders(auth, ct0),
     body: JSON.stringify({ variables, features, queryId: 'UYy9vA3EXPE1yUjdMBPpxg' }),
   });
 
@@ -105,17 +104,17 @@ async function processAkun(index) {
   // 2. Cek quest status
   const me = await fetch(`${BASE}/api/me`, { headers: lebrelHeaders(token) }).then(r => r.json());
   const q = me.quests;
-  console.log(`  Quest status - follow:${q.follow} like:${q.like} quote:${q.quote} card:${q.card}`);
+  console.log(`  Quest - follow:${q.follow} like:${q.like} quote:${q.quote} card:${q.card}`);
 
-  // 3. Submit username X (kalau belum)
+  // 3. Submit username X
   if (!me.x) {
-    console.log(`  Submit username X @${usn}...`);
+    console.log(`  Submit username @${usn}...`);
     await fetch(`${BASE}/api/x`, {
       method: 'POST',
       headers: lebrelHeaders(token),
       body: JSON.stringify({ username: usn }),
     });
-    console.log(`  Nunggu 10 detik verif follow...`);
+    console.log(`  Nunggu 10 detik...`);
     await sleep(10000);
   } else {
     console.log(`  Username X sudah ada: @${me.x.username}`);
@@ -123,7 +122,7 @@ async function processAkun(index) {
 
   // 4. Quest follow
   if (!q.follow) {
-    console.log(`  Claim quest follow...`);
+    console.log(`  Claim follow...`);
     const r = await fetch(`${BASE}/api/quest/follow`, { method: 'POST', headers: lebrelHeaders(token) }).then(r => r.json());
     console.log(`  Follow: ${r.quests?.follow ? 'OK' : 'Gagal'} | Points: ${r.points}`);
     await sleep(2000);
@@ -149,7 +148,7 @@ async function processAkun(index) {
     console.log(`  Post quote tweet...`);
     try {
       const tweetUrl = await postQuoteTweet(auth, ct0, quoteText, QUOTE_TWEET_URL);
-      console.log(`  Tweet URL: ${tweetUrl}`);
+      console.log(`  Tweet: ${tweetUrl}`);
       await sleep(3000);
       const r = await fetch(`${BASE}/api/quest/quote`, {
         method: 'POST',
@@ -167,7 +166,7 @@ async function processAkun(index) {
 
   // 7. Quest card
   if (!q.card) {
-    console.log(`  Claim quest card...`);
+    console.log(`  Claim card...`);
     const r = await fetch(`${BASE}/api/quest/card`, {
       method: 'POST',
       headers: lebrelHeaders(token),
@@ -178,19 +177,19 @@ async function processAkun(index) {
     console.log(`  Card skip.`);
   }
 
-  console.log(`  [${index + 1}] Selesai! Points: ${(await fetch(`${BASE}/api/me`, { headers: lebrelHeaders(token) }).then(r => r.json())).points}`);
+  const final = await fetch(`${BASE}/api/me`, { headers: lebrelHeaders(token) }).then(r => r.json());
+  console.log(`  Selesai! Total points: ${final.points} | Rank: #${final.rank}`);
 }
 
 async function main() {
   const total = emails.length;
   console.log(`Total akun: ${total}`);
-  console.log('Pilih mode:');
   console.log('1. 1 akun');
   console.log('2. Semua akun');
   console.log('3. From X to end');
 
-  const readline = (await import('readline')).createInterface({ input: process.stdin, output: process.stdout });
-  const ask = q => new Promise(r => readline.question(q, r));
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const ask = q => new Promise(r => rl.question(q, r));
 
   const mode = await ask('Pilih (1/2/3): ');
   let indices = [];
@@ -205,7 +204,7 @@ async function main() {
     indices = [...Array(total).keys()].slice(n);
   }
 
-  readline.close();
+  rl.close();
 
   for (const i of indices) {
     await processAkun(i);
