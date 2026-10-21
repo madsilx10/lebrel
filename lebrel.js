@@ -86,10 +86,11 @@ async function postQuoteTweet(auth, ct0, text, quoteUrl) {
 
   const hdrs = xHeaders(auth, ct0);
   console.log('  X headers:', JSON.stringify(hdrs));
-  const res = await fetch('https://api.x.com/graphql/UYy9vA3EXPE1yUjdMBPpxg/CreateTweet', {
+  const QUERY_ID = '7TKRKCPuAGsmYde0CudbVg';
+  const res = await fetch(`https://api.x.com/graphql/${QUERY_ID}/CreateTweet`, {
     method: 'POST',
     headers: hdrs,
-    body: JSON.stringify({ variables, features, queryId: 'UYy9vA3EXPE1yUjdMBPpxg' }),
+    body: JSON.stringify({ variables, features, queryId: QUERY_ID }),
   });
 
   const rawText = await res.text();
