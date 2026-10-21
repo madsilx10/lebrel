@@ -88,7 +88,9 @@ async function postQuoteTweet(auth, ct0, text, quoteUrl) {
     body: JSON.stringify({ variables, features, queryId: 'UYy9vA3EXPE1yUjdMBPpxg' }),
   });
 
-  const data = await res.json();
+  const rawText = await res.text();
+  console.log('  X raw:', rawText);
+  const data = JSON.parse(rawText);
   if (data.errors) throw new Error(JSON.stringify(data.errors));
   const tweetId = data?.data?.create_tweet?.tweet_results?.result?.rest_id;
   if (!tweetId) throw new Error('No tweet ID: ' + JSON.stringify(data));
@@ -133,7 +135,7 @@ async function processAkun(index, onlyQuote) {
   const usn = usns[index];
   const { auth, ct0 } = akuns[index];
 
-  console.log(`\n[${index + 1}] ${email} (@${usn})`);
+  console.log(`\n[${index + 1}] ${email} (@${usn.replace(/^@/, '')})`);
 
   const token = await getLebrelToken(email);
   if (!token) { console.log(`  Gagal dapet token`); return; }
